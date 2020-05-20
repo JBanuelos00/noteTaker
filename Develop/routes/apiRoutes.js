@@ -3,57 +3,76 @@
 // We are linking our routes to a series of "data" sources.
 // These data sources hold arrays of information on table-data, waitinglist, etc.
 // ===============================================================================
-
-var tableData = require("../data/tableData");
-var waitListData = require("../data/waitinglistData");
+const fs = require('fs');
+const notesList = require('../db/db.json');
 
 
 // ===============================================================================
 // ROUTING
 // ===============================================================================
 
-module.exports = function(app) {
-  // API GET Requests
-  // Below code handles when users "visit" a page.
-  // In each of the below cases when a user visits a link
-  // (ex: localhost:PORT/api/admin... they are shown a JSON of the data in the table)
-  // ---------------------------------------------------------------------------
+module.exports = function (app) {
+    // API GET Requests
+    // Below code handles when users "visit" a page.
+    // In each of the below cases when a user visits a link
+    // (ex: localhost:PORT/api/admin... they are shown a JSON of the data in the table)
+    // ---------------------------------------------------------------------------
 
-  app.get("/api/notes", function(req, res) {
-    res.json(tableData);
-  });
+    app.get("/api/notes", function (req, res) {
 
-  // API POST Requests
-  // Below code handles when a user submits a form and thus submits data to the server.
-  // In each of the below cases, when a user submits form data (a JSON object)
-  // ...the JSON is pushed to the appropriate JavaScript array
-  // (ex. User fills out a reservation request... this data is then sent to the server...
-  // Then the server saves the data to the tableData array)
-  // ---------------------------------------------------------------------------
+        // We are reading the db.json file so we can display the notes written within.
+        fs.readFile("./db/db.json", 'utf8', (err, data) => {
+            if (err) throw err;
+            // Parsing the data allows our web browser to read the object.
+            let notes = JSON.parse(data);
+            // This is what returns the parsed data to the browser to be displayed.
+            res.json(notes);
+        });
+    });
 
-  app.post("/api/notes", function(req, res) {
-    // Note the code here. Our "server" will respond to requests and let users know if they have a table or not.
-    // It will do this by sending out the value "true" have a table
-    // req.body is available since we're using the body parsing middleware
-    if (tableData.length < 5) {
-      tableData.push(req.body);
-      res.json(true);
-    }
-    else {
-      waitListData.push(req.body);
-      res.json(false);
-    }
-  });
+    app.post("/api/notes", function (req, res) {
+        // Here we are declaring our new note as an object with all the required parameters
+        const newNote = {
+            id: Date.now(),
+            title: req.body.title,
+            text: req.body.text
+        }
 
-  // ---------------------------------------------------------------------------
-  // I added this below code so you could clear out the table while working with the functionality.
-  // Don"t worry about it!
+        // The first thing we need to do is read the file that we will be adding to.
+        fs.readFile("./db/db.json", "utf8", (err, data) => {
+            if (err) throw err;
+            let notes = JSON.parse(data);
+            // Here we push the information recorded in newNote to our existing json file.
+            notes.push(newNote);
+            // Stringifying it converts back into object notation format to be written properly
+            let updateNotes = JSON.stringify(notes, null, 2);
 
-  app.delete("/api/notes:id", function(req, res) {
-    // Empty out the arrays of data
-    tableData.length = 0;
-    waitListData.length = 0;
+            // Here we finalize the our latest update and record it into our db.json
+            fs.writeFile("./db/db.json", updateNotes, function (err) {
+                if (err) throw err;
+                res.json(notes);
+            });
+        });
+    });
 
-    res.json({ ok: true });
-  });
+    app.delete("/api/notes/:id", function (req, res) {
+        // We are just setting the id variable to the id of the note we are targeting
+        let id = req.params.id;
+
+        fs.readFile('./db/db.json', 'utf8', (err, data) => {
+            if (err) throw err;
+            const notes = JSON.parse(data);
+            // This part is very important, it filters out the note with the target id, effectively "deleting" it and only displaying all other notes
+            const filteredNotes = notes.filter(note => {return note.id != id});
+            // Here we finalize the filtered note list which is what makes the deletion permanent
+            const finalNotes = JSON.stringify(filteredNotes, null, 2);
+            
+            fs.writeFile('./db/db.json', finalNotes, function (err) {
+                if (err) throw err;
+                res.json(notes);
+            })
+        });
+    });
+
+
 };
